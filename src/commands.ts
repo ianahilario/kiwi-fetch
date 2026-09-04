@@ -6,7 +6,7 @@ import { configDest, maybeAddPrepareScript, writeAgentsCatalog, writeInitFiles }
 import { pruneEmptyParents } from './copy.ts'
 import { removeLockEntry, stampAddedAt } from './lock.ts'
 import { listSources } from './list.ts'
-import { syncSources } from './sync.ts'
+import { syncSources, type SyncListener, type SyncResult } from './sync.ts'
 import type { KiwiSource } from './types.ts'
 
 function absDest(cwd: string, destDir: string): string {
@@ -63,6 +63,10 @@ export async function runAdd(
   const destDir = destDirFor(source, configDest(config))
   await stampAddedAt(cwd, [{ name, destDir }])
   const results = await syncSources(cwd, name)
+  const failed = results.find((result) => result.status === 'failed')
+  if (failed) {
+    throw new Error(failed.message)
+  }
   return [`added ${name} to kiwi.config.ts`, ...results.map((result) => result.message)]
 }
 
@@ -85,12 +89,12 @@ export async function runRemove(cwd: string, name: string): Promise<string[]> {
   return [`removed ${name} from kiwi.config.ts and ${resolved.destDir}`]
 }
 
-export async function runSync(cwd: string, name?: string): Promise<string[]> {
-  const results = await syncSources(cwd, name)
-  if (results.length === 0) {
-    return ['No sources in kiwi.config.ts']
-  }
-  return results.map((result) => result.message)
+export async function runSync(
+  cwd: string,
+  name?: string,
+  onEvent?: SyncListener
+): Promise<SyncResult[]> {
+  return syncSources(cwd, name, onEvent)
 }
 
 export async function runList(cwd: string): Promise<string[]> {

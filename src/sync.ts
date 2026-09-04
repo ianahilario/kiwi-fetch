@@ -10,11 +10,24 @@ import { pruneLock, readLock, stampAddedAt } from './lock.ts'
 import { formatPulled, shortSha } from './time.ts'
 import type { KiwiConfig, KiwiMeta, ResolvedSource } from './types.ts'
 
+export type SyncStatus = 'synced' | 'up-to-date' | 'removed' | 'failed'
+
 export interface SyncResult {
   name: string
-  status: 'synced' | 'up-to-date' | 'removed'
+  status: SyncStatus
   sha?: string
   message: string
+}
+
+export type SyncEvent =
+  | { type: 'start'; names: string[] }
+  | { type: 'pulling'; name: string }
+  | { type: 'result'; result: SyncResult }
+
+export type SyncListener = (event: SyncEvent) => void
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function absDest(cwd: string, destDir: string): string {
@@ -156,7 +169,11 @@ async function removeOrphans(
   return removed
 }
 
-export async function syncSources(cwd: string, onlyName?: string): Promise<SyncResult[]> {
+export async function syncSources(
+  cwd: string,
+  onlyName?: string,
+  onEvent?: SyncListener
+): Promise<SyncResult[]> {
   const { config } = await loadConfig(cwd)
   const all = config.sources.map((source) => resolveSource(source, configDest(config)))
   const selected = onlyName ? all.filter((source) => source.name === onlyName) : all
@@ -172,10 +189,29 @@ export async function syncSources(cwd: string, onlyName?: string): Promise<SyncR
 
   const results: SyncResult[] = []
   if (!onlyName) {
-    results.push(...(await removeOrphans(cwd, config, all)))
+    const removed = await removeOrphans(cwd, config, all)
+    for (const result of removed) {
+      results.push(result)
+      onEvent?.({ type: 'result', result })
+    }
   }
+
+  onEvent?.({ type: 'start', names: selected.map((source) => source.name) })
   for (const source of selected) {
-    results.push(await syncOne(cwd, source, new Date()))
+    onEvent?.({ type: 'pulling', name: source.name })
+    try {
+      const result = await syncOne(cwd, source, new Date())
+      results.push(result)
+      onEvent?.({ type: 'result', result })
+    } catch (error) {
+      const result: SyncResult = {
+        name: source.name,
+        status: 'failed',
+        message: errorMessage(error),
+      }
+      results.push(result)
+      onEvent?.({ type: 'result', result })
+    }
   }
 
   const dest = configDest(config)

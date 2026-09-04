@@ -1,8 +1,26 @@
-import { cp, mkdir, readdir, readFile, rmdir, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, readdir, readFile, rmdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
+import type { Stats } from 'node:fs'
 import { META_FILE } from './constants.ts'
 import { includeForSource, shouldCopyPath } from './filter.ts'
 import type { KiwiMeta, ResolvedSource } from './types.ts'
+
+function isMissingPathError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code
+  return code === 'ENOENT' || code === 'ELOOP'
+}
+
+async function isDanglingSymlink(path: string, info: Stats): Promise<boolean> {
+  if (!info.isSymbolicLink()) {
+    return false
+  }
+  try {
+    await stat(path)
+    return false
+  } catch (error) {
+    return isMissingPathError(error)
+  }
+}
 
 export async function readMeta(destDir: string): Promise<KiwiMeta | undefined> {
   try {
@@ -46,7 +64,21 @@ async function copyFiltered(
   if (rel && !shouldCopyPath(rel, extraExclude, include)) {
     return
   }
-  const info = await stat(from)
+
+  let info: Stats
+  try {
+    info = await lstat(from)
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return
+    }
+    throw error
+  }
+
+  if (await isDanglingSymlink(from, info)) {
+    return
+  }
+
   if (info.isDirectory()) {
     await mkdir(to, { recursive: true })
     const entries = await readdir(from)
@@ -55,8 +87,16 @@ async function copyFiltered(
     }
     return
   }
+
   await mkdir(dirname(to), { recursive: true })
-  await cp(from, to)
+  try {
+    await cp(from, to, { verbatimSymlinks: true })
+  } catch (error) {
+    if (info.isSymbolicLink() && isMissingPathError(error)) {
+      return
+    }
+    throw error
+  }
 }
 
 export async function copySourceFiles(
@@ -73,7 +113,7 @@ export async function copySourceFiles(
     const from = path === '.' ? cloneDir : join(cloneDir, path)
     const to = path === '.' ? destDir : join(destDir, path)
     try {
-      await stat(from)
+      await lstat(from)
     } catch {
       throw new Error(`Path ${JSON.stringify(path)} not found in ${source.repo}`)
     }

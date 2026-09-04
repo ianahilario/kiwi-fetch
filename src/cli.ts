@@ -2,6 +2,7 @@
 import { defineCommand, runMain } from 'citty'
 import { createRequire } from 'node:module'
 import { runAdd, runInit, runList, runRemove, runSync } from './commands.ts'
+import { createSyncReporter } from './progress.ts'
 
 const require = createRequire(import.meta.url)
 const { version } = require('../package.json') as { version: string }
@@ -97,13 +98,21 @@ const sync = defineCommand({
     },
   },
   async run({ args }) {
+    const reporter = createSyncReporter()
     try {
       const name = args.name ? String(args.name) : undefined
-      const lines = await runSync(process.cwd(), name)
-      for (const line of lines) {
-        console.log(line)
+      const results = await runSync(process.cwd(), name, reporter.onEvent)
+      if (results.length === 0) {
+        reporter.restore()
+        console.log('No sources in kiwi.config.ts')
+        return
+      }
+      reporter.finish(results)
+      if (results.some((result) => result.status === 'failed')) {
+        process.exitCode = 1
       }
     } catch (error) {
+      reporter.restore()
       fail(error)
     }
   },

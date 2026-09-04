@@ -1,6 +1,6 @@
 {
   "name": "kiwi-fetch",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Pull other git repos or specific files into this project so coding agents can read them as context.",
   "type": "module",
   "bin": {

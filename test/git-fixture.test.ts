@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, symlinkSync, lstatSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -73,7 +73,7 @@ export default defineConfig({
 `
     )
 
-    const messages = await runSync(project)
+    const messages = (await runSync(project)).map((result) => result.message)
     expect(messages.some((line) => line.startsWith('synced app-src'))).toBe(true)
     expect(existsSync(join(project, '.kiwi', 'app-src', 'src', 'index.ts'))).toBe(true)
     expect(existsSync(join(project, '.kiwi', 'app-src', 'docs', 'readme.md'))).toBe(false)
@@ -83,7 +83,7 @@ export default defineConfig({
     )
     expect(existsSync(join(project, '.kiwi', 'app-routes', 'src', 'index.ts'))).toBe(false)
 
-    const again = await runSync(project)
+    const again = (await runSync(project)).map((result) => result.message)
     expect(again.every((line) => line.includes('already up to date'))).toBe(true)
 
     const listed = await runList(project)
@@ -162,5 +162,80 @@ export default defineConfig({
     await runRemove(project, 'acme/app')
     expect(existsSync(join(project, '.kiwi', 'acme', 'app'))).toBe(false)
     expect(existsSync(join(project, '.kiwi', 'acme'))).toBe(false)
+  })
+
+  it('continues syncing remaining sources when one pull fails', async () => {
+    const upstream = makeRepo()
+    const project = mkdtempSync(join(tmpdir(), 'kiwi-partial-'))
+    temps.push(project)
+
+    writeFileSync(
+      join(project, 'kiwi.config.ts'),
+      `import { defineConfig } from 'kiwi-fetch'
+export default defineConfig({
+  dest: '.kiwi',
+  sources: [
+    {
+      name: 'good',
+      description: 'Valid local repo.',
+      repo: ${JSON.stringify(upstream)},
+      ref: 'main',
+    },
+    {
+      name: 'bad',
+      description: 'Missing repo that should not stop the rest.',
+      repo: 'file:///definitely/not/a/kiwi-fetch-repo',
+      ref: 'main',
+    },
+    {
+      name: 'also-good',
+      description: 'Another valid local repo.',
+      repo: ${JSON.stringify(upstream)},
+      ref: 'main',
+      paths: ['src'],
+    },
+  ],
+})
+`
+    )
+
+    const results = await runSync(project)
+    expect(results.find((result) => result.name === 'good')?.status).toBe('synced')
+    expect(results.find((result) => result.name === 'bad')?.status).toBe('failed')
+    expect(results.find((result) => result.name === 'also-good')?.status).toBe('synced')
+    expect(existsSync(join(project, '.kiwi', 'good', 'src', 'index.ts'))).toBe(true)
+    expect(existsSync(join(project, '.kiwi', 'also-good', 'src', 'index.ts'))).toBe(true)
+    expect(existsSync(join(project, '.kiwi', 'bad'))).toBe(false)
+  })
+
+  it.skipIf(process.platform === 'win32')('skips a broken symlink in the upstream repo and still syncs', async () => {
+    const upstream = makeRepo()
+    symlinkSync('./does-not-exist', join(upstream, 'src', 'broken.ts'))
+    git(upstream, ['add', 'src/broken.ts'])
+    git(upstream, ['commit', '-m', 'add broken symlink'])
+
+    const project = mkdtempSync(join(tmpdir(), 'kiwi-symlink-'))
+    temps.push(project)
+    writeFileSync(
+      join(project, 'kiwi.config.ts'),
+      `import { defineConfig } from 'kiwi-fetch'
+export default defineConfig({
+  dest: '.kiwi',
+  sources: [
+    {
+      name: 'app',
+      description: 'Repo with a dangling symlink.',
+      repo: ${JSON.stringify(upstream)},
+      ref: 'main',
+    },
+  ],
+})
+`
+    )
+
+    const results = await runSync(project)
+    expect(results[0]?.status).toBe('synced')
+    expect(existsSync(join(project, '.kiwi', 'app', 'src', 'index.ts'))).toBe(true)
+    expect(() => lstatSync(join(project, '.kiwi', 'app', 'src', 'broken.ts'))).toThrow()
   })
 })
