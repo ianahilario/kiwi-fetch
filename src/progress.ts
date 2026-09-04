@@ -6,8 +6,6 @@ const GREEN = '\x1b[32m'
 const RED = '\x1b[31m'
 const DIM = '\x1b[2m'
 const CYAN = '\x1b[36m'
-const HIDE_CURSOR = '\x1b[?25l'
-const SHOW_CURSOR = '\x1b[?25h'
 
 type LineState = 'pending' | 'pulling' | SyncStatus
 
@@ -149,13 +147,8 @@ export function formatSummary(results: SyncResult[]): string[] {
 
 export function createSyncReporter(options: ReporterOptions = {}) {
   const stdout = options.stdout ?? process.stdout
-  const tty = options.tty ?? Boolean((stdout as NodeJS.WriteStream).isTTY)
   const color = useColor(stdout, options.color)
   const names: string[] = []
-  const states = new Map<string, { state: LineState; detail: string }>()
-  let listLineCount = 0
-  let started = false
-  let cursorHidden = false
 
   function columns(): number {
     return options.columns ?? (stdout as NodeJS.WriteStream).columns ?? 80
@@ -165,100 +158,43 @@ export function createSyncReporter(options: ReporterOptions = {}) {
     stdout.write(text)
   }
 
-  function hideCursor(): void {
-    if (tty && !cursorHidden) {
-      write(HIDE_CURSOR)
-      cursorHidden = true
-    }
-  }
-
-  function showCursor(): void {
-    if (cursorHidden) {
-      write(SHOW_CURSOR)
-      cursorHidden = false
-    }
-  }
-
   function nameWidth(): number {
     return Math.max(1, ...names.map((name) => name.length))
   }
 
-  function renderLine(name: string): string {
-    const current = states.get(name) ?? { state: 'pending' as const, detail: 'pending' }
-    return formatPullLine(name, current.state, current.detail, nameWidth(), {
+  function renderResult(result: SyncResult): string {
+    return formatPullLine(result.name, result.status, lineDetail(result), nameWidth(), {
       color,
       width: columns(),
     })
   }
 
-  function drawList(initial: boolean): void {
-    if (names.length === 0) {
-      return
-    }
-    if (!initial && listLineCount > 0) {
-      write(`\x1b[${listLineCount}A`)
-    }
-    for (const name of names) {
-      write(`\x1b[2K${renderLine(name)}\n`)
-    }
-    listLineCount = names.length
-  }
-
   function onEvent(event: SyncEvent): void {
     if (event.type === 'result' && event.result.status === 'removed') {
-      const line = formatPullLine(
-        event.result.name,
-        'removed',
-        lineDetail(event.result),
-        Math.max(event.result.name.length, nameWidth()),
-        { color, width: columns() }
-      )
-      write(`${line}\n`)
+      write(`${renderResult(event.result)}\n`)
       return
     }
 
     if (event.type === 'start') {
       names.push(...event.names)
-      for (const name of event.names) {
-        states.set(name, { state: 'pending', detail: 'pending' })
-      }
       if (names.length === 0) {
         return
       }
       const noun = names.length === 1 ? 'source' : 'sources'
-      started = true
-      if (tty) {
-        write(`\nPulling ${names.length} ${noun}\n`)
-        hideCursor()
-        write('\n')
-        drawList(true)
-      } else {
-        write(`\nPulling ${names.length} ${noun}: ${names.join(', ')}\n`)
-      }
+      write(`\nPulling ${names.length} ${noun}: ${names.join(', ')}\n`)
       return
     }
 
     if (event.type === 'pulling') {
-      states.set(event.name, { state: 'pulling', detail: 'pulling' })
-      if (tty && started) {
-        drawList(false)
-      }
       return
     }
 
     if (event.type === 'result') {
-      const { result } = event
-      states.set(result.name, { state: result.status, detail: lineDetail(result) })
-      if (tty && started) {
-        drawList(false)
-      } else {
-        write(`${renderLine(result.name)}\n`)
-      }
+      write(`${renderResult(event.result)}\n`)
     }
   }
 
   function finish(results: SyncResult[]): void {
-    showCursor()
     const lines = formatSummary(results)
     if (lines.length === 0) {
       return
@@ -273,5 +209,5 @@ export function createSyncReporter(options: ReporterOptions = {}) {
     }
   }
 
-  return { onEvent, finish, restore: showCursor }
+  return { onEvent, finish, restore: () => undefined }
 }

@@ -60,4 +60,34 @@ describe('sync progress formatting', () => {
     expect(output.match(/✓\s+app/g)).toHaveLength(1)
     expect(output.match(/✗\s+missing/g)?.length).toBeGreaterThanOrEqual(1)
   })
+
+  it('prints each source once even when tty redraw events fire', () => {
+    let output = ''
+    const stdout = new Writable({
+      write(chunk, _encoding, callback) {
+        output += String(chunk)
+        callback()
+      },
+    })
+    const reporter = createSyncReporter({ stdout, color: false, tty: true, columns: 80 })
+    reporter.onEvent({ type: 'start', names: ['app', 'docs', 'lib'] })
+    for (const name of ['app', 'docs', 'lib']) {
+      reporter.onEvent({ type: 'pulling', name })
+      reporter.onEvent({
+        type: 'result',
+        result: { name, status: 'synced', sha: 'abc1234ffff', message: `synced ${name} @ abc1234` },
+      })
+    }
+    reporter.finish([
+      { name: 'app', status: 'synced', sha: 'abc1234ffff', message: 'synced app @ abc1234' },
+      { name: 'docs', status: 'synced', sha: 'abc1234ffff', message: 'synced docs @ abc1234' },
+      { name: 'lib', status: 'synced', sha: 'abc1234ffff', message: 'synced lib @ abc1234' },
+    ])
+
+    expect(output).toContain('Pulling 3 sources: app, docs, lib')
+    expect(output.match(/✓\s+app/g)).toHaveLength(1)
+    expect(output.match(/✓\s+docs/g)).toHaveLength(1)
+    expect(output.match(/✓\s+lib/g)).toHaveLength(1)
+    expect(output).not.toContain('\x1b[')
+  })
 })
