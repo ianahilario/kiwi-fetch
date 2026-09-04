@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/kiwi.png" alt="A cute cartoon illustration of a black and tan long-haired dog happily playing with a colorful rope ball" width="280" />
+  <img src="assets/kiwi.png" alt="A cute cartoon illustration of a black and tan long-haired dog happily playing with a colorful rope ball" width="160" />
 </p>
 
 # kiwi-fetch
