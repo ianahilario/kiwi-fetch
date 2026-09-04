@@ -1,0 +1,53 @@
+{
+  "name": "kiwi-fetch",
+  "version": "0.1.0",
+  "description": "Pull other git repos or specific files into this project so coding agents can read them as context.",
+  "type": "module",
+  "bin": {
+    "kiwi-fetch": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "cli",
+    "git",
+    "agents",
+    "context",
+    "sparse-checkout"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ianahilario/kiwi-fetch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ianahilario/kiwi-fetch/issues"
+  },
+  "homepage": "https://github.com/ianahilario/kiwi-fetch#readme",
+  "dependencies": {
+    "citty": "^0.1.6",
+    "jiti": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
