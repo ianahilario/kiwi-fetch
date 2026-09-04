@@ -1,4 +1,5 @@
 # kiwi-fetch
+<img width="384" height="650" alt="kiwi-fetch" src="https://github.com/user-attachments/assets/864925bc-95f6-4553-ae19-c98140b72898" />
 
 Pull another git repo — or just some of its folders and files — into this project so coding agents can read it as context.
 
