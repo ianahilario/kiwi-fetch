@@ -155,6 +155,16 @@ export default defineConfig({
     //   ref: 'main',
     //   paths: ['src/app/routes.ts'],
     // },
+
+    // Slash in name creates nested folders (.kiwi/acme/app/). exclude skips extra paths:
+    // {
+    //   name: 'acme/app',
+    //   description:
+    //     'Same whole-repo copy as \`app\`, nested under .kiwi/acme/app. Skip the upstream .claude folder.',
+    //   repo: 'acme/my-app',
+    //   ref: 'main',
+    //   exclude: ['.claude'],
+    // },
   ],
 })
 `

@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import { loadConfig, resolveSource, serializeConfig } from './config.ts'
-import { DEFAULT_DEST } from './constants.ts'
+import { destDirFor, loadConfig, resolveSource, serializeConfig, validateConfig } from './config.ts'
 import { configDest, maybeAddPrepareScript, writeAgentsCatalog, writeInitFiles } from './ignore.ts'
+import { pruneEmptyParents } from './copy.ts'
 import { removeLockEntry, stampAddedAt } from './lock.ts'
 import { listSources } from './list.ts'
 import { syncSources } from './sync.ts'
@@ -58,8 +58,9 @@ export async function runAdd(
     source.paths = opts.path.split(',').map((item) => item.trim()).filter(Boolean)
   }
   config.sources.push(source)
+  validateConfig(config)
   await writeFile(path, serializeConfig(config), 'utf8')
-  const destDir = source.dest ?? join(config.dest ?? DEFAULT_DEST, name)
+  const destDir = destDirFor(source, configDest(config))
   await stampAddedAt(cwd, [{ name, destDir }])
   const results = await syncSources(cwd, name)
   return [`added ${name} to kiwi.config.ts`, ...results.map((result) => result.message)]
@@ -71,10 +72,13 @@ export async function runRemove(cwd: string, name: string): Promise<string[]> {
   if (!source) {
     throw new Error(`No source named ${JSON.stringify(name)} in kiwi.config.ts`)
   }
+  const destRoot = join(cwd, configDest(config))
   const resolved = resolveSource(source, configDest(config))
   config.sources = config.sources.filter((item) => item.name !== name)
   await writeFile(path, serializeConfig(config), 'utf8')
-  await rm(absDest(cwd, resolved.destDir), { recursive: true, force: true })
+  const dir = absDest(cwd, resolved.destDir)
+  await rm(dir, { recursive: true, force: true })
+  await pruneEmptyParents(dir, destRoot)
   await removeLockEntry(cwd, name)
   const remaining = config.sources.map((item) => resolveSource(item, configDest(config)))
   await writeAgentsCatalog(cwd, remaining)

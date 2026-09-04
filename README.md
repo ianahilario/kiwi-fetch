@@ -64,11 +64,19 @@ export default defineConfig({
       ref: 'main',
       paths: ['src/app/routes.ts'],
     },
+    {
+      name: 'acme/app',
+      description:
+        'Same whole-repo copy as `app`, nested under .kiwi/acme/app. Skip the upstream .claude folder.',
+      repo: 'acme/my-app',
+      ref: 'main',
+      exclude: ['.claude'],
+    },
   ],
 })
 ```
 
-Those land at `.kiwi/app/` (whole repo without default-excluded files), `.kiwi/app-with-manifest/` (whole repo plus `package.json` via `include`), `.kiwi/app-src/src/...`, and `.kiwi/app-routes/src/app/routes.ts`. Omit `paths` to copy the whole repo minus [default excludes](#default-excludes). Add extra skip patterns per source with `exclude`.
+Those land at `.kiwi/app/` (whole repo without default-excluded files), `.kiwi/app-with-manifest/` (whole repo plus `package.json` via `include`), `.kiwi/app-src/src/...`, `.kiwi/app-routes/src/app/routes.ts`, and `.kiwi/acme/app/` (`name: 'acme/app'`, `.claude` skipped). Names cannot overlap (`app` and `app/src` together is an error). Omit `paths` to copy the whole repo minus [default excludes](#default-excludes). Add extra skip patterns per source with `exclude`.
 
 ## Default excludes
 
@@ -108,6 +116,18 @@ Per-source `exclude` is added on top of this list. Other lockfiles such as `pnpm
   repo: 'acme/my-app',
   ref: 'main',
   include: ['package.json'],
+}
+```
+
+**With `exclude`** — extra skip patterns on top of the defaults (here, the upstream `.claude` folder):
+
+```ts
+{
+  name: 'acme/app',
+  description: 'App source without the upstream .claude folder.',
+  repo: 'acme/my-app',
+  ref: 'main',
+  exclude: ['.claude'],
 }
 ```
 
@@ -175,6 +195,7 @@ Public repos clone anonymously over HTTPS.
 ```markdown
 - **<<app>>** (`.kiwi/app`): Production app source under test. ...
 - **<<app-src>>** (`.kiwi/app-src`): App src/ tree only. ...
+- **<<acme/app>>** (`.kiwi/acme/app`): Same whole-repo copy as `app`, nested under folders. Skip the upstream .claude folder. ...
 ```
 
 Do not edit files inside `.kiwi/` — the next sync wipes that folder and copies again.

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runInit, runList, runSync } from '../src/commands.ts'
+import { runInit, runList, runRemove, runSync } from '../src/commands.ts'
 import { loadConfig } from '../src/config.ts'
 
 const temps: string[] = []
@@ -26,15 +26,18 @@ function makeRepo(): string {
   temps.push(dir)
   mkdirSync(join(dir, 'src', 'app'), { recursive: true })
   mkdirSync(join(dir, 'docs'), { recursive: true })
+  mkdirSync(join(dir, '.claude'), { recursive: true })
   writeFileSync(join(dir, 'src', 'index.ts'), 'export const app = true\n')
   writeFileSync(join(dir, 'src', 'app', 'routes.ts'), 'export const routes = ["/"]\n')
   writeFileSync(join(dir, 'docs', 'readme.md'), '# docs\n')
   writeFileSync(join(dir, 'package.json'), '{"name":"app"}\n')
   writeFileSync(join(dir, '.env'), 'SECRET=1\n')
+  writeFileSync(join(dir, '.claude', 'settings.json'), '{}\n')
   git(dir, ['init', '-b', 'main'])
   git(dir, ['config', 'user.email', 'kiwi@example.com'])
   git(dir, ['config', 'user.name', 'Kiwi'])
   git(dir, ['add', '.'])
+  git(dir, ['add', '-f', '.claude'])
   git(dir, ['commit', '-m', 'init'])
   return dir
 }
@@ -126,5 +129,38 @@ export default defineConfig({
     expect(listed[0]).toContain('—')
     expect(listed[0]).toContain('added')
     expect(listed[0]).not.toContain('last pulled')
+  })
+
+  it('creates nested folders when name includes slashes, then prunes them on remove', async () => {
+    const upstream = makeRepo()
+    const project = mkdtempSync(join(tmpdir(), 'kiwi-nested-'))
+    temps.push(project)
+
+    writeFileSync(
+      join(project, 'kiwi.config.ts'),
+      `import { defineConfig } from 'kiwi-fetch'
+export default defineConfig({
+  dest: '.kiwi',
+  sources: [
+    {
+      name: 'acme/app',
+      description: 'Nested dest folder.',
+      repo: ${JSON.stringify(upstream)},
+      ref: 'main',
+      exclude: ['.claude'],
+    },
+  ],
+})
+`
+    )
+
+    await runSync(project)
+    expect(existsSync(join(project, '.kiwi', 'acme', 'app', 'src', 'index.ts'))).toBe(true)
+    expect(existsSync(join(project, '.kiwi', 'acme', 'app', 'docs', 'readme.md'))).toBe(true)
+    expect(existsSync(join(project, '.kiwi', 'acme', 'app', '.claude'))).toBe(false)
+
+    await runRemove(project, 'acme/app')
+    expect(existsSync(join(project, '.kiwi', 'acme', 'app'))).toBe(false)
+    expect(existsSync(join(project, '.kiwi', 'acme'))).toBe(false)
   })
 })

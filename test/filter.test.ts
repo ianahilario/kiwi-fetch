@@ -34,6 +34,9 @@ describe('default excludes', () => {
   it('applies extra exclude globs', () => {
     expect(isExcluded('src/secret.ts', ['src/secret.ts'])).toBe(true)
     expect(matchesExclude('docs/internal.md', ['docs/**'])).toBe(true)
+    expect(isExcluded('.claude/settings.json', ['.claude'])).toBe(true)
+    expect(isExcluded('.claude', ['.claude'])).toBe(true)
+    expect(isExcluded('src/index.ts', ['.claude'])).toBe(false)
   })
 
   it('includes the documented default list', () => {

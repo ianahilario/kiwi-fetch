@@ -1,5 +1,5 @@
-import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { dirname, join, relative, resolve } from 'node:path'
+import { cp, mkdir, readdir, readFile, rmdir, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { META_FILE } from './constants.ts'
 import { includeForSource, shouldCopyPath } from './filter.ts'
 import type { KiwiMeta, ResolvedSource } from './types.ts'
@@ -16,6 +16,23 @@ export async function readMeta(destDir: string): Promise<KiwiMeta | undefined> {
 export async function writeMeta(destDir: string, meta: KiwiMeta): Promise<void> {
   await mkdir(destDir, { recursive: true })
   await writeFile(join(destDir, META_FILE), `${JSON.stringify(meta, null, 2)}\n`, 'utf8')
+}
+
+export async function pruneEmptyParents(dir: string, stopAt: string): Promise<void> {
+  const root = resolve(stopAt)
+  let current = dirname(resolve(dir))
+  while (current.startsWith(root + sep)) {
+    try {
+      const entries = await readdir(current)
+      if (entries.length > 0) {
+        break
+      }
+      await rmdir(current)
+    } catch {
+      break
+    }
+    current = dirname(current)
+  }
 }
 
 async function copyFiltered(

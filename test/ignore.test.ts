@@ -87,6 +87,8 @@ describe('ignore helpers', () => {
     expect(stub).toContain("include: ['package.json']")
     expect(stub).toContain("paths: ['src']")
     expect(stub).toContain("paths: ['src/app/routes.ts']")
+    expect(stub).toContain("name: 'acme/app'")
+    expect(stub).toContain("exclude: ['.claude']")
   })
 })
 

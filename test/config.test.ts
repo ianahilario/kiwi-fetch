@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ConfigError, loadConfig, serializeConfig, validateConfig } from '../src/config.ts'
+import { ConfigError, destDirFor, loadConfig, serializeConfig, validateConfig } from '../src/config.ts'
 import { defineConfig } from '../src/index.ts'
 
 const temps: string[] = []
@@ -46,6 +46,38 @@ describe('validateConfig', () => {
         sources: [{ name: '../x', description: 'bad', repo: 'acme/a' }],
       })
     ).toThrow(ConfigError)
+    expect(() =>
+      validateConfig({
+        sources: [{ name: '..', description: 'bad', repo: 'acme/a' }],
+      })
+    ).toThrow(ConfigError)
+    expect(() =>
+      validateConfig({
+        sources: [{ name: 'foo/../bar', description: 'bad', repo: 'acme/a' }],
+      })
+    ).toThrow(ConfigError)
+  })
+
+  it('allows slash-separated names and maps them to nested dest folders', () => {
+    expect(() =>
+      validateConfig({
+        sources: [{ name: 'acme/app', description: 'App source', repo: 'acme/app' }],
+      })
+    ).not.toThrow()
+    expect(
+      destDirFor({ name: 'acme/app', description: 'App source', repo: 'acme/app' }, '.kiwi')
+    ).toBe(join('.kiwi', 'acme', 'app'))
+  })
+
+  it('rejects overlapping dest folders', () => {
+    expect(() =>
+      validateConfig({
+        sources: [
+          { name: 'app', description: 'one', repo: 'acme/a' },
+          { name: 'app/src', description: 'two', repo: 'acme/b' },
+        ],
+      })
+    ).toThrow(/overlaps/)
   })
 })
 

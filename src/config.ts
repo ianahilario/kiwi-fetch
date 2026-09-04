@@ -5,6 +5,9 @@ import { createJiti } from 'jiti'
 import { CONFIG_FILES, DEFAULT_DEST, NAME_PATTERN } from './constants.ts'
 import type { KiwiConfig, KiwiSource, ResolvedSource } from './types.ts'
 
+const NAME_RULE =
+  'slash-separated segments of letters, digits, ".", "_" or "-" (not "." or "..")'
+
 export class ConfigError extends Error {
   constructor(message: string) {
     super(message)
@@ -43,6 +46,29 @@ export function findProjectRoot(start = process.cwd()): string {
   }
 }
 
+function posixDest(dest: string): string {
+  return dest.replaceAll('\\', '/').replace(/\/+$/, '')
+}
+
+function destsOverlap(a: string, b: string): boolean {
+  const left = posixDest(a)
+  const right = posixDest(b)
+  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
+}
+
+function assertSafeName(name: string, label: string): void {
+  if (!NAME_PATTERN.test(name) || name.split('/').some((segment) => segment === '.' || segment === '..')) {
+    throw new ConfigError(`${label}.name ${JSON.stringify(name)} must be ${NAME_RULE}`)
+  }
+}
+
+export function destDirFor(source: KiwiSource, configDest: string): string {
+  if (source.dest) {
+    return source.dest
+  }
+  return join(configDest, ...source.name.split('/'))
+}
+
 function validateSource(source: KiwiSource, index: number, seen: Set<string>): void {
   const label = `sources[${index}]`
   if (!source || typeof source !== 'object') {
@@ -51,11 +77,7 @@ function validateSource(source: KiwiSource, index: number, seen: Set<string>): v
   if (!source.name || typeof source.name !== 'string') {
     throw new ConfigError(`${label}.name is required`)
   }
-  if (!NAME_PATTERN.test(source.name)) {
-    throw new ConfigError(
-      `${label}.name ${JSON.stringify(source.name)} must match ${NAME_PATTERN}`
-    )
-  }
+  assertSafeName(source.name, label)
   if (seen.has(source.name)) {
     throw new ConfigError(`duplicate source name ${JSON.stringify(source.name)}`)
   }
@@ -87,8 +109,20 @@ export function validateConfig(raw: unknown): KiwiConfig {
   }
   const seen = new Set<string>()
   config.sources.forEach((source, index) => validateSource(source, index, seen))
+  const dest = config.dest ?? DEFAULT_DEST
+  for (let i = 0; i < config.sources.length; i++) {
+    const left = destDirFor(config.sources[i]!, dest)
+    for (let j = i + 1; j < config.sources.length; j++) {
+      const right = destDirFor(config.sources[j]!, dest)
+      if (destsOverlap(left, right)) {
+        throw new ConfigError(
+          `source dest ${JSON.stringify(left)} overlaps ${JSON.stringify(right)}`
+        )
+      }
+    }
+  }
   return {
-    dest: config.dest ?? DEFAULT_DEST,
+    dest,
     sources: config.sources,
   }
 }
@@ -120,7 +154,7 @@ export function resolveSource(source: KiwiSource, configDest: string): ResolvedS
     paths: source.paths,
     exclude: source.exclude ?? [],
     include: source.include ?? [],
-    destDir: source.dest ?? join(configDest, source.name),
+    destDir: destDirFor(source, configDest),
   }
 }
 
