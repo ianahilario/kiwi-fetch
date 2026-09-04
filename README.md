@@ -1,8 +1,12 @@
+<p align="center">
+  <img src="assets/kiwi.png" alt="A cute cartoon illustration of a black and tan long-haired dog happily playing with a colorful rope ball" width="280" />
+</p>
+
 # kiwi-fetch
 
 Pull another git repo — or just some of its folders and files — into this project so coding agents can read it as context.
 
-Typical case: an automation test repo that needs the app repo beside it. Edit `kiwi.config.ts`, then run `kiwi-fetch sync`. You do not need `add`.
+Typical case: an automation test repo that needs the app repo beside it. Edit `kiwi.config.ts`, then run `kiwi-fetch sync`.
 
 ```bash
 npm i -D kiwi-fetch
