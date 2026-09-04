@@ -116,26 +116,32 @@ export function formatPullLine(
 }
 
 export function formatSummary(results: SyncResult[]): string[] {
-  const pulled = results.filter((result) => result.status !== 'removed')
+  const succeeded = results.filter((result) => result.status === 'synced' || result.status === 'up-to-date')
+  const failed = results.filter((result) => result.status === 'failed')
   const removed = results.filter((result) => result.status === 'removed')
-  const nameWidth = Math.max(1, ...results.map((result) => result.name.length))
-  const lines = ['Summary']
-
-  for (const result of pulled) {
-    const detail = result.status === 'failed' ? firstLine(result.message) : lineDetail(result)
-    lines.push(formatPullLine(result.name, result.status, detail, nameWidth))
-    if (result.status === 'failed') {
-      const rest = result.message.trim().split('\n').slice(1)
-      for (const line of rest) {
-        if (line.trim()) {
-          lines.push(`    ${line}`)
-        }
-      }
-    }
+  const parts: string[] = []
+  if (succeeded.length > 0) {
+    parts.push(`${succeeded.length} succeeded`)
+  }
+  if (failed.length > 0) {
+    parts.push(`${failed.length} failed`)
+  }
+  if (removed.length > 0) {
+    parts.push(`${removed.length} removed`)
   }
 
-  for (const result of removed) {
-    lines.push(formatPullLine(result.name, 'removed', lineDetail(result), nameWidth))
+  const lines: string[] = []
+  if (parts.length > 0) {
+    lines.push(parts.join(', '))
+  }
+
+  for (const result of failed) {
+    lines.push(`  ✗ ${result.name}`)
+    for (const line of result.message.trim().split('\n')) {
+      if (line.trim()) {
+        lines.push(`    ${line}`)
+      }
+    }
   }
 
   return lines
@@ -253,25 +259,17 @@ export function createSyncReporter(options: ReporterOptions = {}) {
 
   function finish(results: SyncResult[]): void {
     showCursor()
+    const lines = formatSummary(results)
+    if (lines.length === 0) {
+      return
+    }
     write('\n')
-    for (const line of formatSummary(results)) {
-      if (line === 'Summary') {
-        write(`${paint(color, DIM, line)}\n`)
-        continue
-      }
-      if (line.includes('✓')) {
-        write(`${paint(color, GREEN, line)}\n`)
-        continue
-      }
-      if (line.includes('✗') || line.startsWith('    ')) {
+    for (const line of lines) {
+      if (line.startsWith('  ✗') || line.startsWith('    ')) {
         write(`${paint(color, RED, line)}\n`)
         continue
       }
-      if (line.includes('–')) {
-        write(`${paint(color, DIM, line)}\n`)
-        continue
-      }
-      write(`${line}\n`)
+      write(`${paint(color, DIM, line)}\n`)
     }
   }
 

@@ -10,18 +10,18 @@ describe('sync progress formatting', () => {
     expect(formatPullLine('app', 'pending', 'pending', 8)).toContain('○')
   })
 
-  it('summarizes which sources succeeded and which failed', () => {
+  it('summarizes counts and failed sources without repeating successes', () => {
     const results: SyncResult[] = [
       { name: 'app', status: 'synced', sha: 'abc1234def', message: 'synced app @ abc1234' },
       { name: 'docs', status: 'up-to-date', sha: 'abc1234def', message: 'docs already up to date' },
       { name: 'missing', status: 'failed', message: 'Authentication failed for https://example.com/missing.git' },
     ]
     const lines = formatSummary(results)
-    expect(lines[0]).toBe('Summary')
-    expect(lines.some((line) => line.includes('✓') && line.includes('app'))).toBe(true)
-    expect(lines.some((line) => line.includes('✓') && line.includes('docs'))).toBe(true)
+    expect(lines[0]).toBe('2 succeeded, 1 failed')
     expect(lines.some((line) => line.includes('✗') && line.includes('missing'))).toBe(true)
     expect(lines.some((line) => line.includes('Authentication failed'))).toBe(true)
+    expect(lines.some((line) => line.includes('app') && line.includes('✓'))).toBe(false)
+    expect(lines.some((line) => line.includes('docs'))).toBe(false)
   })
 
   it('uses the short sha for a synced line', () => {
@@ -56,7 +56,8 @@ describe('sync progress formatting', () => {
     expect(output).toContain('Pulling 2 sources: app, missing')
     expect(output).toMatch(/✓\s+app\s+synced @ abc1234/)
     expect(output).toMatch(/✗\s+missing\s+repository not found/)
-    expect(output).toMatch(/Summary[\s\S]*✓\s+app/)
-    expect(output).toMatch(/Summary[\s\S]*✗\s+missing/)
+    expect(output).toContain('1 succeeded, 1 failed')
+    expect(output.match(/✓\s+app/g)).toHaveLength(1)
+    expect(output.match(/✗\s+missing/g)?.length).toBeGreaterThanOrEqual(1)
   })
 })
