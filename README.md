@@ -4,6 +4,13 @@
 
 # kiwi-fetch
 
+<a href="https://www.npmjs.com/package/kiwi-fetch">
+  <img alt="npm downloads" src="https://img.shields.io/npm/d18m/kiwi-fetch.svg">
+</a>
+<a href="https://www.npmjs.com/package/kiwi-fetch">
+  <img alt="npm downloads weekly" src="https://img.shields.io/npm/dw/kiwi-fetch.svg">
+</a>
+
 Pull another git repo — or just some of its folders and files — into this project so coding agents can read it as context.
 
 Typical case: an automation test repo that needs the app repo beside it. Edit `kiwi.config.ts`, then run `kiwi-fetch sync`.
